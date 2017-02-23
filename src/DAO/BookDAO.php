@@ -2,27 +2,19 @@
 
 namespace MyBooks\DAO;
 
-use Doctrine\DBAL\Connection;
+
 use MyBooks\Domain\Book;
 
-class BookDAO
+class BookDAO extends DAO
 {
-    /**
-     * Database connection
-     *
-     * @var \Doctrine\DBAL\Connection
+     
+      /**
+     * @var \MyBooks\DAO\AuthorDAO
      */
-    private $db;
-
-    /**
-     * Constructor
-     *
-     * @param \Doctrine\DBAL\Connection The database connection object
-     */
-    public function __construct(Connection $db) {
-        $this->db = $db;
+    private $authorDAO;
+    public function setAuthorDAO(AuthorDAO $authorDAO) {
+        $this->authorDAO = $authorDAO;
     }
-
     /**
      * Return a list of all books, sorted by date (most recent first).
      *
@@ -30,28 +22,54 @@ class BookDAO
      */
     public function findAll() {
         $sql = "select * from book order by book_id desc";
-        $result = $this->db->fetchAll($sql);
+        $result = $this->getDb()->fetchAll($sql);
         
         // Convert query result to an array of domain objects
         $books = array();
         foreach ($result as $row) {
             $bookId = $row['book_id'];
-            $books[$bookId] = $this->buildBook($row);
+            $books[$bookId] = $this->buildDomainObject($row);
         }
         return $books;
     }
+    /**
+     * Returns a book matching the supplied id.
+     *
+     * @param integer $id
+     *
+     * @return \MyBooks\Domain\Book|throws an exception if no matching book is found
+     */
+    public function find($id) {
+        $sql = "select * from book where book_id=?";
+        $row = $this->getDb()->fetchAssoc($sql, array($id));
+        if ($row)
+            return $this->buildDomainObject($row);
+        else
+            throw new \Exception("No book matching id " . $id);
+    }
+    
 
     /**
-     * Creates an Article object based on a DB row.
+     * Creates an Comment object based on a DB row.
      *
-     * @param array $row The DB row containing Article data.
-     * @return \MicroCMS\Domain\Article
+     * @param array $row The DB row containing Comment data.
+     * @return \MyBooks\Domain\Book
      */
-    private function buildBook(array $row) {
+    protected function buildDomainObject(array $row) {
         $book = new Book();
         $book->setId($row['book_id']);
         $book->setTitle($row['book_title']);
+        $book->setIsbn($row['book_isbn']);
         $book->setSummary($row['book_summary']);
+
+        if (array_key_exists('auth_id', $row)) {
+            // Find and set the associated article
+            $authorId = $row['auth_id'];
+            $author = $this->authorDAO->find($authorId);
+            $book->setAuthor($author);
+        }
+        
         return $book;
     }
+
 }
